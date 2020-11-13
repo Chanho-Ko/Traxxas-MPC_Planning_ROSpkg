@@ -1,0 +1,5 @@
+<launch>
+  <node pkg="mpc_planning" type="mpc_planning_node" name="mpc_planning_node" output="screen" />
+  <node pkg="joy" type="joy_node" name="joy_node" output="screen"/>
+  <node pkg="pos_est" type="pos_est_node" name="pos_est_node" output="screen"/>
+</launch>
