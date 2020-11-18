@@ -38,23 +38,44 @@ public:
     size_t input_dim = 2;
     double dt = 0.05;
     size_t N = 20;
-    size_t n_itrs = 1;
+    size_t n_itrs = 5;
     size_t n_line = 10;
     double J_reltol = 1e-6;
     double diff_eps = 1e-5;
     bool converged = false;
 
     // model variables
-    double lf = 1.36, lr = 1.36;
+    double lf = 0.24, lr = 0.24;
     double L = lf + lr;
 
     // cost related variables
-    double Q_v = 5;
+    double Q_v = 10;
     double Q_y = 10;
-    double R_delta = 500;
-    double R_a = 40;
+    double R_delta = 100;
+    double R_a = 10;
     double v_target = 10. * 1000./3600.;
-    double y_target = 4.;
+    double y_target = 2.;
+
+    // iteration variables
+    vector<VectorXd> x_array;
+    vector<VectorXd> u_array; // u_array[N] should be always 0
+    vector<VectorXd> x_array_new;
+    vector<VectorXd> u_array_new;
+    vector<VectorXd> k_array;
+    vector<MatrixXd> K_array;
+    VectorXd J_opt;
+    VectorXd J_new;
+    CppAD::ADFun<double> f;
+    CppAD::ADFun<double> l;
+    VectorXd xu;
+    MatrixXd f_xu_t, f_xu, fx, fu;
+    MatrixXd l_xu, lx, lu;
+    MatrixXd l_xuxu, lxx, lux, luu;
+    MatrixXd Vx, Vxx;
+    MatrixXd Qx, Qu, Qxx, Quu, Qux, invQuu;
+
+    iLQRsolver();
+    void initialize();
 
     template <typename var>
     Matrix< var, Dynamic, 1 > dynamics_continuous(
@@ -70,7 +91,7 @@ public:
         var Xdot = v * cos(psi+beta);
         var Ydot = v * sin(psi+beta);
         var psidot = v/lr * sin(beta);
-        var vdot = a;
+        var vdot = a - 0.4;
 
         Matrix< var, Dynamic, 1 > dx(state_dim);
         dx << Xdot, Ydot, psidot, vdot;
@@ -106,7 +127,6 @@ public:
         Matrix< var, Dynamic, 1 > dx(state_dim);
         Matrix< var, Dynamic, 1 > x_new(state_dim);
         var t = i * dt;
-
         dx = dynamics_continuous(t, x, u);
         x_new = x + dx * dt;
         return x_new;
@@ -124,8 +144,6 @@ public:
         Matrix< var, Dynamic, 1 > x_(state_dim);
 
         k1 = dynamics_continuous(t, x, u);
-
-        t_ = t + 0.5*dt;
         x_ = x + 0.5*k1*dt;
         k2 = dynamics_continuous(t_, x_, u);
 
@@ -211,23 +229,6 @@ public:
         vector<VectorXd> &k_array_opt,
         vector<MatrixXd> &K_array_opt)
     {
-        vector<VectorXd> x_array(N+1, VectorXd(state_dim));
-        vector<VectorXd> u_array(N+1, VectorXd(input_dim)); // u_array[N] should be always 0
-        vector<VectorXd> x_array_new(N+1, VectorXd(state_dim));
-        vector<VectorXd> u_array_new(N+1, VectorXd(input_dim));
-        vector<VectorXd> k_array(N, VectorXd(input_dim));
-        vector<MatrixXd> K_array(N, MatrixXd(input_dim, state_dim));
-        VectorXd J_opt(1);
-        VectorXd J_new(1);
-        CppAD::ADFun<double> f;
-        CppAD::ADFun<double> l;
-        VectorXd xu(state_dim+input_dim);
-        MatrixXd f_xu_t, f_xu, fx, fu;
-        MatrixXd l_xu, lx, lu;
-        MatrixXd l_xuxu, lxx, lux, luu;
-        MatrixXd Vx, Vxx;
-        MatrixXd Qx, Qu, Qxx, Quu, Qux, invQuu;
-
         double alpha = 1.0;
         converged = false;
 
@@ -294,7 +295,13 @@ public:
 
                 apply_control(x_array, u_array, k_array, K_array, alpha, x_array_new, u_array_new);
                 J_new = trajectory_cost(x_array_new, u_array_new);
-
+                //std::cout << "u_array_new :  \n" << u_array_new[0] << "\n"  << u_array_new[1] << "\n"  << u_array_new[5] << "\n"  << u_array_new[10]<< "\n"   << u_array_new[19] << std::endl;
+                //std::cout << "x_array_new :  \n" << x_array_new[1] << std::endl;
+                if (itr == 0 && j == 0){
+                    J_opt = J_new;
+                    x_array = x_array_new;
+                    u_array = u_array_new;
+                }
                 if (J_new[0] < J_opt[0]) {
                     if (abs((J_opt[0]-J_new[0])/J_opt[0]) < J_reltol) {
                         J_opt = J_new;
@@ -310,6 +317,7 @@ public:
                         break;
                     }
                 }
+
             }
 
             if (converged)
@@ -320,5 +328,25 @@ public:
         u_array_opt = u_array;
         k_array_opt = k_array;
         K_array_opt = K_array;
+
     }
 };
+
+
+iLQRsolver::iLQRsolver()
+{
+    this->initialize();
+}
+
+void iLQRsolver::initialize()
+{
+    x_array = vector<VectorXd>(N+1, VectorXd(state_dim));
+    u_array = vector<VectorXd>(N+1, VectorXd(input_dim)); // u_array[N] should be always 0
+    x_array_new = vector<VectorXd>(N+1, VectorXd(state_dim));
+    u_array_new = vector<VectorXd>(N+1, VectorXd(input_dim));
+    k_array = vector<VectorXd>(N, VectorXd(input_dim));
+    K_array = vector<MatrixXd>(N, MatrixXd(input_dim, state_dim));
+    J_opt = VectorXd(1);
+    J_new = VectorXd(1);
+    xu = VectorXd(state_dim+input_dim);
+}
