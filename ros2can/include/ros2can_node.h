@@ -15,7 +15,7 @@ private:
     double axes[6];
     int buttons[12];
     double steer_gain = 0.045;
-    double torque_gain = 0.2; //torque gain
+    double torque_gain = 1; //torque gain
 
 public:
     Ros2Can(ros::NodeHandle* nodehandle);
@@ -42,7 +42,7 @@ void Ros2Can::joyCallback(const sensor_msgs::Joy::ConstPtr& msg)
         buttons[i] = msg->buttons[i];
 
    
-    publish_CAN_Frame(axes[3], axes[0]);
+    publish_CAN_Frame(axes[0], axes[3]);
     
 }
 
@@ -71,8 +71,8 @@ void Ros2Can::planningCallback(const std_msgs::Float32MultiArray::ConstPtr& msg)
 
 void Ros2Can::publish_CAN_Frame(const double steer_n, const double torque_n)
 {
-    double pulsewidth1 = 1500. + 300.*steer_n; // motor input
-    double pulsewidth2 = 1500. - 300.*torque_n; // steer input
+    double pulsewidth1 = 1500. + 300.*torque_n; // motor input
+    double pulsewidth2 = 1500. - 300.*steer_n; // steer input
     can_msgs::Frame canframe;
     canframe.id = 2;
     canframe.is_rtr = false;
@@ -83,5 +83,5 @@ void Ros2Can::publish_CAN_Frame(const double steer_n, const double torque_n)
     canframe.data[1] = (int)pulsewidth1 % 256;
     canframe.data[2] = (int)pulsewidth2 / 256;
     canframe.data[3] = (int)pulsewidth2 % 256;
-    pub.publish(canframe);
+    pub_can.publish(canframe);
 }

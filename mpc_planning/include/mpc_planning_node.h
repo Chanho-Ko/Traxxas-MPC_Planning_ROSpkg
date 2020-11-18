@@ -67,7 +67,7 @@ void Planner::solve_OP()
     system_clock::time_point start = system_clock::now();
     step_time =  duration_cast<microseconds>(start - start_prev);
     start_prev = start;
-    ROS_INFO("Step Time: %f", step_time.count()/1000.0);
+    // ROS_INFO("Step Time: %f", step_time.count()/1000.0);
 
     /* 
      * 
@@ -78,14 +78,15 @@ void Planner::solve_OP()
     ilqr.ilqr_iterate(x, u_init, x_array_opt, u_array_opt, k_array_opt, K_array_opt);
     u = u_array_opt[0];
     
+
     system_clock::time_point end = system_clock::now();
     cal_time = duration_cast<microseconds>(end - start);
     ROS_INFO("Calculation Time: %f", cal_time.count()/1000.0);
 
     x = ilqr.dynamics_discrete(1, x, u);
     
-    //std::cout << "Input: \n" << u << std::endl;
-    //std::cout << "State: \n" << x << std::endl;
+    std::cout << "Input: \n" << u << std::endl;
+    std::cout << "State: \n" << x << std::endl;
     
     
     /* Publish message for control inputs*/
